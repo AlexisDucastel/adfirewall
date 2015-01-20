@@ -1,0 +1,35 @@
+#!/bin/bash
+#===[ Configuration ]==========================================================
+
+	MAINDIR="/etc/adfirewall"
+	CONFIGURATIONS="$MAINDIR/conf.d"
+	MODULES="$MAINDIR/modules"
+	ALIASES="$MAINDIR/alias.d"
+	LASTRULES="$MAINDIR/last.rules"
+	LASTDESC="$MAINDIR/last.desc"
+	PKGDIR="$MAINDIR/packages"
+
+	RUNDIR="/var/run"
+	RULES="$RUNDIR/adfirewall.rules"
+	DESC="$RUNDIR/adfirewall.desc"
+
+	IPTABLES="/sbin/iptables"
+
+#===[ Rules priority ]=========================================================
+
+	# Blacklist => Trust => Serving => Needing
+	# iptables is a lifo style rules list
+	# Last rule applies first => revert order
+	PRIO_PURGE="00"
+	PRIO_STD="02"
+	PRIO_PKINIT="03"
+	PRIO_NEEDING="04"
+	PRIO_PINGABLE="05"
+	PRIO_SERVING="06"
+	PRIO_TRUST="08"
+	PRIO_PKDONE="09"
+	PRIO_BLACKLIST="10"
+	PRIORITIES="$PRIO_PURGE $PRIO_STD $PRIO_PKINIT $PRIO_NEEDING $PRIO_PINGABLE $PRIO_SERVING $PRIO_TRUST $PRIO_PKDONE $PRIO_BLACKLIST"
+
+	# Aliases
+	PRIO_NAT="$PRIO_STD"

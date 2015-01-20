@@ -1,0 +1,83 @@
+#!/bin/bash
+#--------------------------------------------------------------------------
+# PortKnock : Allow connection after a sequence of tcp connections
+#
+# patterns :
+#	PortKnock open <portlist> during <duration> after <sequence>
+#		duration = number of seconds while connections are allowed
+#		sequence = port list in numeric format, ex : 1000 2000 3000
+#
+#	PortKnock trust me during <duration> after <sequence>
+#		duration = number of seconds while connections are allowed
+#		sequence = port list in numeric format, ex : 1000 2000 3000
+#
+# examples :
+# 	PortKnock open ssh,www during 3 after 1000 3000 2000
+# 	PortKnock trust me during 600 after 1000 4000 2000 5000
+#--------------------------------------------------------------------------
+PKCNT=0
+function PortKnock {
+	duration="$4"
+	sequence=${*:6}
+	nseq=$(fw-count $sequence)
+	nlast=$(( $nseq + 1 ))
+	PKCNT=$(( $PKCNT + 1 ))
+	PKID="PK$PKCNT"
+
+	# Port knocking tables creation ( 2, 3, nport+1 )
+	for i in $(seq 2 $nlast)
+	do
+		fw-addRule $PRIO_PKINIT $IPTABLES -N "$PKID"T$i;
+	done
+
+	# Opening port or trust a peer ?
+	case $1 in
+		open)
+			ports=$(fw-parsePortList $2)
+
+			# Authorization for ports in last port knocking state
+			for p in $ports
+			do
+				port=$(fw-explode $p / 1)
+				proto=$(fw-explode $p / 2)
+				fw-addDescription $PRIO_PKDONE [input][*][$PKID]["$(echo $sequence |sed 's/ /->/g')->$port/$proto"]=ACCEPT
+				fw-addRule $PRIO_PKDONE $IPTABLES -A INPUT -j "$PKID"T$nlast -p $proto -m state --state NEW -m $proto --dport $port -m recent --rcheck --seconds $duration --name "$PKID"T$nlast --rsource
+			done
+			;;
+		trust)
+			fw-addDescription $PRIO_PKDONE [input][*][$PKID]["$(echo $sequence |sed 's/ /->/g')->*"]=ACCEPT
+			fw-addRule $PRIO_PKDONE $IPTABLES -A INPUT -j "$PKID"T$nlast -m state --state NEW -m recent --rcheck --seconds $duration --name "$PKID"T$nlast --rsource
+			;;
+		*)
+			die "PortKnock : Unknown method $1"
+			;;
+	esac
+
+	# Grant access on last port knocking state
+	fw-addRule $PRIO_PKDONE $IPTABLES -A "$PKID"T$nlast -m recent --rsource --set --name "$PKID"T$nlast -j ACCEPT
+
+	# Port knocking sequencing
+	SHORTPKRULE="fw-addRule $PRIO_PKINIT $IPTABLES -A INPUT -p tcp -m state --state NEW -m tcp --dport"
+	n=1
+
+	for i in $sequence
+	do
+		KNOCKACTION="LOG"
+		next=$(( $n + 1 ))
+		case "$n" in
+			1)
+				# Just flag with next port authorization name
+				$SHORTPKRULE $i -m recent --set --name "$PKID"T$next --rsource -j $KNOCKACTION
+				;;
+			*)
+				# Checking if current authorization is flagged, then go in current table
+				$SHORTPKRULE $i -m recent --rcheck --seconds 3 --name "$PKID"T$n --rsource -j "$PKID"T$n
+				# Removing current label
+				fw-addRule $PRIO_PKINIT $IPTABLES -A "$PKID"T$n -m recent --remove --name "$PKID"T$n --rsource
+				# Tagging for next label authorization
+				fw-addRule $PRIO_PKINIT $IPTABLES -A "$PKID"T$n -m recent --set --name "$PKID"T$next --rsource -j $KNOCKACTION
+				;;
+		esac
+		n=$(( $n + 1 ))
+	done
+}

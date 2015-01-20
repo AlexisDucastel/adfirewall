@@ -1,0 +1,25 @@
+#!/bin/bash
+
+echo "Applying file permissions ..."
+chmod 700 /etc/init.d/adfirewall
+
+echo "Installing adfirewall after boot ..."
+/usr/sbin/update-rc.d adfirewall defaults
+
+
+CFDIR="/etc/adfirewall/conf.d"
+[ -e $CFDIR/main.conf ] || (
+	echo "Creating first configuration file"
+	cp $CFDIR/main.conf.sample $CFDIR/main.conf
+)
+
+# OpenVZ test
+[ -d /proc/vz ] && (
+	echo "This server seems to be OpenVZ enabled !"
+	echo "Don't forget to enable these module on the host :"
+	echo "	modprobe ipt_recent"
+	echo "	modprobe ip_conntrack"
+	echo "	modprobe xt_state"
+) || echo "No OpenVZ environment detected ..."
+
+echo "adfirewall config done..."

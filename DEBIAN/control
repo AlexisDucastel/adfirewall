@@ -1,0 +1,12 @@
+Package: adfirewall
+Version: 1.4.0
+Architecture: all
+Maintainer: Alexis Ducastel <alexis@ducastel.net>
+Installed-Size: 112
+Depends: wget, iptables, sed , gawk, at
+Section: adrepo
+Priority: extra
+Homepage: https://adrepo.net/adfirewall
+Description: iptables based firewall with advanced features
+  Netfilter (iptables) based firewall with Port Knocking, NAT and advanced features
+

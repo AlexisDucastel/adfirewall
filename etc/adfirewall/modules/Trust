@@ -1,0 +1,43 @@
+#!/bin/bash
+#--------------------------------------------------------------------------
+# Trust : Accept all connection from an ip/network/interface
+#
+# patterns :
+# 	Trust peer <ip/network>[,<ip/network>[,...]]
+#
+#	Trust interface <interface>
+#
+# examples :
+#	Trust peer hostname.domain.tld
+#	Trust peer 5.6.7.8
+#	Trust peer 3.4.5.0/24
+#	Trust peer hostname.domain.tld,5.6.7.8,3.4.5.0/24
+#	Trust interface eth0
+#--------------------------------------------------------------------------
+function Trust {
+	fromFilter=""
+	case $1 in
+		peer)
+			fromFilter=" -s $2 "
+			toFilter=" -d $2 "
+			;;
+		interface)
+			fromFilter=" -i $2 "
+			toFilter=" -d $2 "
+			;;
+		*)
+			die "Not a valid method : Trust $*"
+			;;
+	esac
+
+	# Describing for each hosts
+	for i in $(echo $2 | sed 's/,/ /g')
+	do
+		fw-addDescription $PRIO_TRUST [input][$i]=ACCEPT
+		fw-addDescription $PRIO_TRUST [output][$i]=ACCEPT
+	done
+
+	# Accepting in one rule
+	fw-addRule $PRIO_TRUST $IPTABLES -I INPUT -j ACCEPT $fromFilter
+	fw-addRule $PRIO_TRUST $IPTABLES -I OUTPUT -j ACCEPT $toFilter
+}

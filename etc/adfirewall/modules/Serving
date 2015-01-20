@@ -1,0 +1,51 @@
+#!/bin/bash
+#--------------------------------------------------------------------------
+# Serving : Allow connection for one or many ports
+#
+# patterns :
+#	Serving <portlist> [for <ip/network>] [on <ip>]
+#		for = ip or network of authorized peer
+#		on = local listening ip address
+#
+#	Serving <portlist> [via <interface>]
+#		via = interface authorized to server portlist
+#
+# examples :
+#	Serving www,ssh
+# 	Serving mysql for 5.6.7.8
+# 	Serving 8080 on 3.4.5.6
+# 	Serving 8080/tcp on 3.4.5.6 for 5.6.7.8
+# 	Serving smtp via eth0
+#--------------------------------------------------------------------------
+function Serving {
+	ports=$(fw-parsePortList $1)
+	fromFilter=""
+	destFilter=""
+	fromdesc="*"
+	tgtdesc="*"
+
+	[ "$4" = "for" ] && fromFilter=" -s $5 " && fromdesc="$5"
+
+	case $2 in
+		"on")
+			destFilter=" -d $3 "
+			tgtdesc="$3"
+			;;
+		"via")
+			destFilter=" -i $3 "
+			tgtdesc="$3"
+			;;
+		"for")
+			fromFilter=" -s $3 "
+			fromdesc="$3"
+			;;
+	esac
+
+	for p in $ports
+	do
+		port=$(fw-explode $p / 1)
+		proto=$(fw-explode $p / 2)
+		fw-addDescription $PRIO_SERVING [input]["$fromdesc=>$tgtdesc"][$port/$proto]=ACCEPT
+		fw-addRule $PRIO_SERVING $IPTABLES -I INPUT -j ACCEPT $fromFilter $destFilter --protocol $proto --destination-port $port
+	done
+}

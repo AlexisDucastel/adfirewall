@@ -1,0 +1,192 @@
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides:          adfirewall
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: iptables based firewall with advanced features
+# Description:       Netfilter (iptables) based firewall with Port Knocking
+#                    and advanced features
+### END INIT INFO
+
+# Author: Alexis Ducastel <alexis@ducastel.net>
+
+#===[ Configuration ]==========================================================
+
+	source /etc/default/adfirewall
+
+#===[ Utilities functions ]====================================================
+
+	# Iptables rules list
+	function fw-status { $IPTABLES -L; }
+
+	# Display explanation on running rules
+	function fw-explain { [ -e $LASTDESC ] && cat $LASTDESC || echo "No explanation"; }
+
+	# Shut down all connections
+	function fw-panic {
+		echo $*
+		echo "Dropping all connections now !"
+		#$IPTABLES -A INPUT -j DROP
+	}
+
+	# Display firewall usage
+	function usage { echo "$0 start|stop|restart|explain|status|panic|test" ; }
+
+	# Print error and exit
+	function die { echo -e $* >&2 ; exit 1 ; }
+
+	# Count number of arguments
+	function fw-count { echo $#; }
+
+
+	# Add an iptable rule with a priority of $1
+	function fw-addRule {
+		echo ${*:2} >> $RULES.$1
+	}
+
+	# Add a description with priority of $1
+	function fw-addDescription {
+		echo ${*:2} >> $DESC.$1
+	}
+
+	# Compiling rules and executing
+	function fw-exec {
+		cat $DESC.* > $LASTDESC
+		cat $RULES.* | tee $LASTRULES | bash
+	}
+
+	function fw-explode {
+		echo $1 |/usr/bin/awk "-F$2" '{print $'$3'}'
+	}
+
+#===[ Common functionnalities ]================================================
+
+	# Dropping rules and get back to default rules
+	function fw-purge {
+		for i in $PRIORITIES
+		do
+			[ -e $RULES.$i ] && rm $RULES.$i
+			[ -e $DESC.$i ] && rm $DESC.$i
+		done
+
+		fw-addDescription $PRIO_PURGE [output][default]=ACCEPT
+		fw-addRule $PRIO_PURGE $IPTABLES -P OUTPUT ACCEPT
+		fw-addDescription $PRIO_PURGE [forward][default]=ACCEPT
+		fw-addRule $PRIO_PURGE $IPTABLES -P FORWARD ACCEPT
+		fw-addDescription $PRIO_PURGE [input][default]=ACCEPT
+		fw-addRule $PRIO_PURGE $IPTABLES -P INPUT ACCEPT
+		fw-addDescription $PRIO_PURGE flushing rules
+		fw-addRule $PRIO_PURGE $IPTABLES -F
+		fw-addDescription $PRIO_PURGE flushing custom tables
+		fw-addRule $PRIO_PURGE $IPTABLES -X
+		fw-addDescription $PRIO_PURGE flushing counters
+		fw-addRule $PRIO_PURGE $IPTABLES -Z
+	}
+
+	# Applying standard common rules
+	function fw-std {
+		# Standard rules ( established + loopback )
+		fw-addDescription $PRIO_STD [input][established]=ACCEPT
+		fw-addRule $PRIO_STD $IPTABLES -I INPUT -j ACCEPT -m state --state ESTABLISHED,RELATED
+		fw-addDescription $PRIO_STD [input][loopback]=ACCEPT
+		fw-addRule $PRIO_STD $IPTABLES -I INPUT -j ACCEPT -i lo
+	}
+
+	# Applying configurations
+	function fw-fromconf {
+		# Chargement des packages
+		for i in $(find "$PKGDIR"/*.pkg)
+		do
+			source "$i"
+		done
+
+		# Chargement des configurations
+		for i in $(find "$CONFIGURATIONS"/*.conf)
+		do
+			source "$i"
+		done
+	}
+
+	# Port parsing
+	function fw-parsePort {
+
+		# port is a simple number
+		if [ "$(echo "$1" | tr -cd "[:digit:]")" = "$1" ]
+		then
+			echo "$1/tcp"
+			return 0
+		fi
+
+		# already formatted port declaration
+		echo $1 | grep -E "^[0-9]*/(tcp|udp|both)" > /dev/null
+		if [ "$?" = "0" ]
+		then
+			if [ "$( fw-explode $1 / 2 )" = "both" ]
+			then
+				p="$( fw-explode $1 / 1 )"
+				echo "$p/tcp $p/udp"
+			else
+				echo "$1"
+			fi
+			return 0
+		fi
+
+		# Searching in ALIASES
+		p=$([ -e "$ALIASES"/*.alias ] && grep "^$1\s" "$ALIASES"/*.alias | /usr/bin/awk '{print $2}' |paste "-sd " | /bin/sed -e 's/^ *//g' -e 's/ *$//g')
+		if [ "$p" != "" ]
+		then
+			echo $p
+			return 0
+		fi
+
+		# Searching in /etc/services
+		p=$([ -f /etc/services ] && grep "^$1\s" /etc/services | /usr/bin/awk '{print $2}' |paste "-sd " | /bin/sed -e 's/^ *//g' -e 's/ *$//g')
+		if [ "$p" != "" ]
+		then
+			echo $p
+			return 0
+		fi
+
+		die "Cannot find port for $1"
+	}
+
+	function fw-parsePortList {
+		ports=""
+		for i in $( echo $1 | /bin/sed 's/,/ /g')
+		do
+			ports="$ports $(fw-parsePort $i)"
+		done
+		echo "$ports"
+	}
+
+	function fw-test {
+		[ "$FWTESTTIME" = "" ] && FWTESTTIME="5"
+		echo "adfirewall will automatically drop in $FWTESTTIME minutes..."
+		echo "service adfirewall stop" | at "now + $FWTESTTIME minutes"
+	}
+
+	function SetTestTimeInMinutes {
+		FWTESTTIME="$1"
+	}
+
+
+#===[ Configuration available function ]=======================================
+
+	# Chargement des modules
+	for i in $(find "$MODULES"/*)
+	do
+		source "$i"
+	done
+
+#===[ Main ]===================================================================
+case $1 in
+	start)	fw-purge && fw-std && fw-fromconf && fw-exec && fw-explain;;
+	test)	fw-purge && fw-std && fw-fromconf && fw-exec && fw-explain && fw-test;;
+	stop)	fw-purge && fw-exec;;
+	restart)fw-purge && fw-std && fw-fromconf && fw-exec && fw-explain;;
+	explain)fw-explain ;;
+	status)	fw-status ;;
+	*)	usage && exit 0 ;;
+esac

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "Installing adfirewall after boot ..."
+/usr/sbin/update-rc.d -f adfirewall remove

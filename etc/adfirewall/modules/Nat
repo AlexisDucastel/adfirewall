@@ -1,0 +1,60 @@
+#!/bin/bash
+#--------------------------------------------------------------------------
+# Nat : provide internet access to private network
+#
+# patterns :
+#       Nat inside <ip/network> outside <ip>
+#	Nat forward <ip>:<port> to <ip>:<port>
+#
+# examples :
+#       Nat inside 10.0.0.0/8 outside 5.6.7.8
+#	Nat forward 5.6.7.8:1022 to 10.0.0.1:22
+#--------------------------------------------------------------------------
+NATINIT=no
+function NatInit {
+	[ "$NATINIT" = "done" ] && return 0
+
+	$IPTABLES -L -t nat 2>&1 >/dev/null
+	[ "$?" != "0" ] && die "Cannot find 'nat' table in iptables"
+
+	fw-addDescription $PRIO_PURGE flushing nat table
+	fw-addRule $PRIO_PURGE $IPTABLES -t nat -F
+	fw-addRule $PRIO_PURGE $IPTABLES -t nat -X
+	fw-addRule $PRIO_PURGE $IPTABLES -t nat -Z
+	NATINIT="done"
+}
+
+function Nat {
+	NatInit
+
+	case $1 in
+                1:1)
+			inside="$2"
+			outside="$4"
+			Trust peer "$inside"
+			fw-addDescription $PRIO_NAT [nat]["$inside<=>$outside]"=1:1
+			fw-addRule $PRIO_NAT $IPTABLES -t nat -A POSTROUTING -j SNAT -s "$inside" --to "$outside"
+			fw-addRule $PRIO_NAT $IPTABLES -t nat -A PREROUTING -j DNAT -d "$outside" --to "$inside"
+			;;
+		inside)
+		        inside="$2"
+		        outside="$4"
+			Trust peer "$inside"
+        		fw-addDescription $PRIO_NAT [nat]["$inside=>$outside]"=NAT
+        		fw-addRule $PRIO_NAT $IPTABLES -t nat -A POSTROUTING -j SNAT -s "$inside" '!' -d "$inside"  --to "$outside"
+			;;
+		forward)
+			ip=$(echo $2 | sed 's/:.*//g')
+			port=$(echo $2 | sed 's/.*://g')
+			dest="$4"
+
+			Serving "$port" on "$ip" $5 $6
+			fw-addDescription $PRIO_NAT [nat]["$ip:$port=>$dest"]=FWD
+			fw-addRule $PRIO_NAT $IPTABLES -t nat -A PREROUTING -p tcp -d $ip --dport $port -j DNAT --to-destination $dest
+			;;
+		*)
+			die "Unknown pattern Nat $*"
+			;;
+	esac
+}
+

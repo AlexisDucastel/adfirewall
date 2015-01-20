@@ -1,0 +1,16 @@
+#!/bin/bash
+#--------------------------------------------------------------------------
+# Package : Load a package with parameters
+#
+# patterns :
+# 	Package <name> [<args>]
+#		name : Name of the package to load
+#		args : arguments depending on package needs
+#
+# examples :
+#	Package mypkg arg1 arg2 arg3
+#--------------------------------------------------------------------------
+function Package {
+	pkg-$1 ${*:2} || die "Error while executing package $1"
+}
+

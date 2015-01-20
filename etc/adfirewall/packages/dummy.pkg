@@ -1,0 +1,5 @@
+#!/bin/bash
+
+function pkg-dummy {
+	echo "This is a dummy package"
+}

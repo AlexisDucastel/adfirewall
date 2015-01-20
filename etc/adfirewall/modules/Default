@@ -1,0 +1,25 @@
+#!/bin/bash
+#--------------------------------------------------------------------------
+# Default : Defines default action for input/output
+#
+# patterns :
+# 	Default <input|output> <accept/drop/reject>
+#
+# examples :
+# 	Default input drop
+# 	Default output accept
+#--------------------------------------------------------------------------
+function Default {
+	case $1 in
+		input) table=INPUT ;;
+		output) table=OUTPUT ;;
+	esac
+
+	case $2 in
+		accept) action=ACCEPT ;;
+		drop) action=DROP ;;
+	esac
+
+	fw-addDescription $PRIO_STD [$1][default]=$action
+	fw-addRule $PRIO_STD $IPTABLES -P $table $action
+}

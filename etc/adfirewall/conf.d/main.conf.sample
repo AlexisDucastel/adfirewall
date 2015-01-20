@@ -1,0 +1,39 @@
+# adfirewall configuration sample file
+#
+# Here are some configuration examples
+# See /etc/adfirewall/manual.txt for 
+# configuration explanations
+
+#===[ Test Time ]=========================================
+SetTestTimeInMinutes 5
+
+#===[ Default behavior ]==================================
+#Default input drop
+
+#===[ Whitelist management ]==============================
+#Trust peer hostname.domain.tld
+#Trust peer 5.6.7.8
+#Trust peer 3.4.5.0/24
+#Trust peer hostname.domain.tld,5.6.7.8,3.4.5.0/24
+#Trust interface eth0
+
+#===[ Blacklist management ]==============================
+#Blacklist host.domain.tld
+#Blacklist 5.6.7.8
+#Blacklist 3.4.5.0/24
+#Blacklist host.domain.tld,55.6.7.8,3.4.5.0/24
+
+#===[ Simple filtering ]==================================
+#Serving www,ssh
+#Serving mysql for 5.6.7.8
+#Serving 8080 on 3.4.5.6
+#Serving 8080/tcp on 3.4.5.6 for 5.6.7.8
+#Serving smtp via eth0
+
+#===[ Port Knocking ]=====================================
+#PortKnock open ssh,www during 3 after 1000 3000 2000
+#PortKnock trust me during 600 after 1000 4000 2000
+
+#===[ Nat ]=====================================
+#Nat inside 10.0.0.0/8 outside 5.6.7.8
+#Nat forward 5.6.7.8:1022 to 10.0.0.1:22
